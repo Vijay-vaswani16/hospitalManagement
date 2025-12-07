@@ -56,13 +56,13 @@ public class WebSecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .oauth2Login(oAuth2 -> oAuth2
-                        .failureHandler((request, response, exception) -> {
-                            log.error("OAuth2 error: {}", exception.getMessage());
-                            handlerExceptionResolver.resolveException(request, response, null, exception);
-                        })
-                        .successHandler(oAuth2SuccessHandler)
-                )
+//                .oauth2Login(oAuth2 -> oAuth2
+//                        .failureHandler((request, response, exception) -> {
+//                            log.error("OAuth2 error: {}", exception.getMessage());
+//                            handlerExceptionResolver.resolveException(request, response, null, exception);
+//                        })
+//                        .successHandler(oAuth2SuccessHandler)
+//                )
                 .exceptionHandling(exceptionHandlingConfigurer ->
                         exceptionHandlingConfigurer.accessDeniedHandler((request, response, accessDeniedException) -> {
                             handlerExceptionResolver.resolveException(request, response, null, accessDeniedException);
