@@ -12,7 +12,7 @@ import type {
   User,
 } from '../types';
 
-const API_BASE_URL = '/api/v1';
+const API_BASE_URL = 'https://hospitalmanagement-i0jn.onrender.com/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
