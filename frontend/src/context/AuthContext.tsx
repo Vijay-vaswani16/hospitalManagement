@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authAPI, detectUserRole } from '../services/api';
-import type { LoginRequest, SignUpRequest, LoginResponse, RoleType } from '../types';
+import type { LoginRequest, SignUpRequest, LoginResponse, RoleType, Patient } from '../types';
+import { getHighestRoleFromToken, getUsernameFromToken } from '../utils/jwt';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   token: string | null;
   userId: number | null;
   userRole: RoleType | null;
+  patientProfile: Patient | null;
   login: (data: LoginRequest) => Promise<void>;
   signup: (data: SignUpRequest) => Promise<void>;
   logout: () => void;
@@ -38,7 +40,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const stored = localStorage.getItem('userRole');
     return stored ? (stored as RoleType) : null;
   });
+  const [lastUsername, setLastUsername] = useState<string | null>(localStorage.getItem('lastUsername'));
+  const [patientProfile, setPatientProfile] = useState<Patient | null>(() => {
+    try {
+      const raw = localStorage.getItem('patientProfile');
+      return raw ? (JSON.parse(raw) as Patient) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(false);
+
+  // --- helpers: cache role by username (frontend-only) ---
+  const getCachedRole = (username?: string | null): RoleType | null => {
+    if (!username) return null;
+    try {
+      const raw = localStorage.getItem('userRoleByUsername');
+      if (!raw) return null;
+      const map = JSON.parse(raw) as Record<string, RoleType>;
+      return map[username] || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedRole = (username: string, role: RoleType) => {
+    try {
+      const raw = localStorage.getItem('userRoleByUsername');
+      const map = raw ? (JSON.parse(raw) as Record<string, RoleType>) : {};
+      map[username] = role;
+      localStorage.setItem('userRoleByUsername', JSON.stringify(map));
+    } catch {
+      // ignore cache errors
+    }
+  };
 
   const refreshUserRole = async () => {
     if (!token) {
@@ -82,12 +117,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [userRole]);
 
+  useEffect(() => {
+    if (patientProfile) {
+      localStorage.setItem('patientProfile', JSON.stringify(patientProfile));
+    } else {
+      localStorage.removeItem('patientProfile');
+    }
+  }, [patientProfile]);
+
+  useEffect(() => {
+    if (lastUsername) {
+      localStorage.setItem('lastUsername', lastUsername);
+    } else {
+      localStorage.removeItem('lastUsername');
+    }
+  }, [lastUsername]);
+
   const login = async (data: LoginRequest) => {
     setLoading(true);
     try {
       const response: LoginResponse = await authAPI.login(data);
       setToken(response.jwt);
       setUserId(response.userId);
+      setLastUsername(data.username);
+
+      // 1) Try JWT role immediately
+      const roleFromToken = getHighestRoleFromToken(response.jwt);
+      if (roleFromToken) {
+        setUserRole(roleFromToken);
+        localStorage.setItem('userRole', roleFromToken);
+        setCachedRole(data.username, roleFromToken);
+      }
+
+      // 2) Fallback to cached role by username (from prior signup)
+      const cachedRole = getCachedRole(data.username);
+      if (cachedRole) {
+        setUserRole(cachedRole);
+        localStorage.setItem('userRole', cachedRole);
+      }
+
+      // 3) Cache patient profile if provided in login response
+      if (response.patient) {
+        setPatientProfile(response.patient as Patient);
+        localStorage.setItem('patientProfile', JSON.stringify(response.patient));
+      }
+
       // Role will be detected in useEffect when token is set
     } finally {
       setLoading(false);
@@ -111,6 +185,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Set the role immediately from signup data (before role detection)
       setUserRole(selectedRole);
       localStorage.setItem('userRole', selectedRole);
+      setCachedRole(data.username, selectedRole);
+      setLastUsername(data.username);
       
       // After signup, automatically login
       await login({ username: data.username, password: data.password });
@@ -123,9 +199,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     setUserId(null);
     setUserRole(null);
+    setPatientProfile(null);
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
     localStorage.removeItem('userRole');
+    localStorage.removeItem('patientProfile');
+    localStorage.removeItem('userRoleByUsername');
+    localStorage.removeItem('lastUsername');
   };
 
   const hasRole = (role: RoleType): boolean => {
@@ -137,6 +217,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     token,
     userId,
     userRole,
+    patientProfile,
     login,
     signup,
     logout,

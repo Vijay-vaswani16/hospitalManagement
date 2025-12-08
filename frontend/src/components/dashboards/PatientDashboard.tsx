@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { patientAPI, publicAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import type { Patient, Doctor, CreateAppointmentRequest } from '../../types';
 import { format } from 'date-fns';
+import { getUsernameFromToken } from '../../utils/jwt';
 
 export const PatientDashboard: React.FC = () => {
-  const { userId } = useAuth();
-  const [patient, setPatient] = useState<Patient | null>(null);
+  const { userId, patientProfile } = useAuth();
+  const [patient, setPatient] = useState<Patient | null>(patientProfile || null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState<CreateAppointmentRequest>({
@@ -15,10 +16,31 @@ export const PatientDashboard: React.FC = () => {
     appointmentTime: '',
     reason: '',
   });
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentTime, setAppointmentTime] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+
+  // Fallbacks derived from JWT in case backend returns minimal data
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const usernameFromToken = useMemo(() => (token ? getUsernameFromToken(token) : null), [token]);
+
+  console.log('usernameFromToken --> ', usernameFromToken);
+  console.log('token --> ', token);
+  console.log('patientProfile --> ', patientProfile);
+
+  // Combine date and time into ISO format for appointmentTime
+  useEffect(() => {
+    if (appointmentDate && appointmentTime) {
+      const combinedDateTime = `${appointmentDate}T${appointmentTime}`;
+      setAppointmentForm({ ...appointmentForm, appointmentTime: combinedDateTime });
+    } else {
+      setAppointmentForm({ ...appointmentForm, appointmentTime: '' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointmentDate, appointmentTime]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -28,6 +50,7 @@ export const PatientDashboard: React.FC = () => {
           publicAPI.getAllDoctors(),
         ]);
         setPatient(patientData);
+        localStorage.setItem('patientProfile', JSON.stringify(patientData));
         setDoctors(doctorsData);
       } catch (err: unknown) {
         const error = err as { response?: { data?: { message?: string } } };
@@ -46,10 +69,18 @@ export const PatientDashboard: React.FC = () => {
     setError('');
     setSuccess('');
 
+    // Validate date and time are selected
+    if (!appointmentDate || !appointmentTime) {
+      setError('Please select both date and time for your appointment');
+      setSubmitting(false);
+      return;
+    }
+
     try {
       await patientAPI.createAppointment({
         ...appointmentForm,
         patientId: userId || 0,
+        appointmentTime: `${appointmentDate}T${appointmentTime}`,
       });
       setSuccess('Appointment created successfully!');
       setShowAppointmentForm(false);
@@ -59,6 +90,8 @@ export const PatientDashboard: React.FC = () => {
         appointmentTime: '',
         reason: '',
       });
+      setAppointmentDate('');
+      setAppointmentTime('');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       setError(error.response?.data?.message || 'Failed to create appointment');
@@ -100,43 +133,65 @@ export const PatientDashboard: React.FC = () => {
       {/* Profile Card */}
       {patient && (
         <div className="bg-white rounded-2xl shadow-soft p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Profile Information</h3>
+                <p className="text-sm text-gray-500">Data from your patient profile</p>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Profile Information</h3>
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-semibold uppercase">
+                {(patient.name || usernameFromToken || 'P').charAt(0)}
+              </div>
+              <div className="text-sm text-gray-600">
+                <div className="font-semibold text-gray-900">{usernameFromToken || patient.name || 'Not provided'}</div>
+                <div className="text-gray-500">{patient.gender || 'Gender not set'}</div>
+              </div>
+            </div>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-100">
-                <dt className="text-xs font-bold text-green-700 uppercase tracking-wider mb-1">Name</dt>
-                <dd className="text-lg font-semibold text-gray-900">{patient.name}</dd>
+                <dt className="text-xs font-bold text-green-700 uppercase tracking-wider mb-1">Name (profile)</dt>
+                <dd className="text-lg font-semibold text-gray-900">{patientProfile?.name || 'Not provided'}</dd>
+                {usernameFromToken && patient.name && patient.name !== usernameFromToken 
+                // && (
+                //   <p className="text-xs text-amber-600 mt-1">
+                //     Note: Account username is {usernameFromToken}; profile name differs.
+                //   </p>
+                // )
+                }
               </div>
-              {patient.gender && (
-                <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-100">
-                  <dt className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Gender</dt>
-                  <dd className="text-lg font-semibold text-gray-900">{patient.gender}</dd>
-                </div>
-              )}
+              <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-100">
+                <dt className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Gender</dt>
+                <dd className="text-lg font-semibold text-gray-900">{patient.gender || 'Not provided'}</dd>
+              </div>
             </div>
             <div className="space-y-4">
-              {patient.birthDate && (
-                <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100">
-                  <dt className="text-xs font-bold text-purple-700 uppercase tracking-wider mb-1">Date of Birth</dt>
-                  <dd className="text-lg font-semibold text-gray-900">
-                    {format(new Date(patient.birthDate), 'MMMM dd, yyyy')}
-                  </dd>
-                </div>
-              )}
-              {patient.bloodGroup && (
-                <div className="p-4 bg-gradient-to-br from-red-50 to-orange-50 rounded-xl border border-red-100">
-                  <dt className="text-xs font-bold text-red-700 uppercase tracking-wider mb-1">Blood Group</dt>
-                  <dd className="text-lg font-semibold text-gray-900">{patient.bloodGroup.replace('_', ' ')}</dd>
-                </div>
-              )}
+              <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100">
+                <dt className="text-xs font-bold text-purple-700 uppercase tracking-wider mb-1">Date of Birth</dt>
+                <dd className="text-lg font-semibold text-gray-900">
+                  {patient.birthDate ? format(new Date(patient.birthDate), 'MMMM dd, yyyy') : 'Not provided'}
+                </dd>
+              </div>
+              <div className="p-4 bg-gradient-to-br from-red-50 to-orange-50 rounded-xl border border-red-100">
+                <dt className="text-xs font-bold text-red-700 uppercase tracking-wider mb-1">Blood Group</dt>
+                <dd className="text-lg font-semibold text-gray-900">
+                  {patient.bloodGroup ? patient.bloodGroup.replace('_', ' ') : 'Not provided'}
+                </dd>
+              </div>
             </div>
+          </div>
+
+          <div className="mt-4 text-xs text-gray-500">
+            This data comes from <code>/patients/profile</code>. If something looks wrong or empty, update your profile or contact admin. Your account username is {usernameFromToken || 'unknown'}.
           </div>
         </div>
       )}
@@ -227,27 +282,97 @@ export const PatientDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="appointmentTime" className="block text-sm font-semibold text-gray-700 mb-2">
-                Appointment Date & Time
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="appointmentDate" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <span className="flex items-center space-x-2">
+                    <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span>Appointment Date</span>
+                  </span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <input
+                    id="appointmentDate"
+                    type="date"
+                    required
+                    min={new Date().toISOString().split('T')[0]}
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                    value={appointmentDate}
+                    onChange={(e) => setAppointmentDate(e.target.value)}
+                  />
                 </div>
-                <input
-                  id="appointmentTime"
-                  type="datetime-local"
-                  required
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
-                  value={appointmentForm.appointmentTime}
-                  onChange={(e) =>
-                    setAppointmentForm({ ...appointmentForm, appointmentTime: e.target.value })
-                  }
-                />
+                <p className="mt-1 text-xs text-gray-500">Select a date from today onwards</p>
               </div>
+
+              <div>
+                <label htmlFor="appointmentTime" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <span className="flex items-center space-x-2">
+                    <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Appointment Time</span>
+                  </span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    id="appointmentTime"
+                    type="time"
+                    required
+                    min={appointmentDate === new Date().toISOString().split('T')[0] ? new Date().toTimeString().slice(0, 5) : '09:00'}
+                    max="17:00"
+                    step="900"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                    value={appointmentTime}
+                    onChange={(e) => setAppointmentTime(e.target.value)}
+                  />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="text-xs text-gray-500">Quick select:</span>
+                  {['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00'].map((time) => (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => setAppointmentTime(time)}
+                      className={`px-3 py-1 text-xs font-medium rounded-lg transition-all duration-200 ${
+                        appointmentTime === time
+                          ? 'bg-primary-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Available hours: 9:00 AM - 5:00 PM (15-minute intervals)</p>
+              </div>
+
+              {appointmentDate && appointmentTime && (
+                <div className="p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-200">
+                  <p className="text-sm font-semibold text-blue-900">
+                    <span className="flex items-center space-x-2">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>
+                        Selected: {format(new Date(`${appointmentDate}T${appointmentTime}`), 'EEEE, MMMM dd, yyyy')} at{' '}
+                        {format(new Date(`2000-01-01T${appointmentTime}`), 'h:mm a')}
+                      </span>
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

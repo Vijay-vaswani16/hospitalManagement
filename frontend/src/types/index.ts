@@ -27,11 +27,6 @@ export interface SignUpRequest {
   roles: RoleType[];
 }
 
-export interface LoginResponse {
-  jwt: string;
-  userId: number;
-}
-
 export interface SignupResponse {
   id: number;
   username: string;
@@ -82,5 +77,11 @@ export interface UserInfo {
   id: number;
   username: string;
   roles: RoleType[];
+}
+
+export interface LoginResponse {
+  jwt: string;
+  userId: number;
+  patient?: Patient;
 }
 
