@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -41,6 +42,28 @@ public class AuthService {
         return dto;
     }
 
+//    public LoginResponseDto login(LoginRequestDto loginRequestDto) {
+//
+//        Authentication authentication = authenticationManager.authenticate(
+//                new UsernamePasswordAuthenticationToken(
+//                        loginRequestDto.getUsername(),
+//                        loginRequestDto.getPassword()
+//                )
+//        );
+//
+//        User user = (User) authentication.getPrincipal();
+//
+//        String token = authUtil.generateAccessToken(user);
+//
+//        Patient patient = patientRepository.findByUserId(user.getId())
+//                .orElseThrow(() -> new RuntimeException("Patient not found for this user"));
+//
+//
+//        PatientResponseDto patientDto = toPatientDto(patient);
+//
+//        return new LoginResponseDto(token, user.getId(), patientDto);
+//    }
+
     public LoginResponseDto login(LoginRequestDto loginRequestDto) {
 
         Authentication authentication = authenticationManager.authenticate(
@@ -57,11 +80,19 @@ public class AuthService {
         Patient patient = patientRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new RuntimeException("Patient not found for this user"));
 
-
         PatientResponseDto patientDto = toPatientDto(patient);
 
-        return new LoginResponseDto(token, user.getId(), patientDto);
+        return new LoginResponseDto(
+                token,
+                user.getId(),
+                patientDto,
+                new HashSet<>(user.getRoles()
+                        .stream()
+                        .map(Enum::name)
+                        .toList())
+        );
     }
+
 
 //    public LoginResponseDto login(LoginRequestDto loginRequestDto) {
 //
@@ -107,7 +138,7 @@ public class AuthService {
     // login controller
     public SignupResponseDto signup(SignUpRequestDto signupRequestDto) {
         User user = signUpInternal(signupRequestDto, AuthProviderType.EMAIL, null);
-        return new SignupResponseDto(user.getId(), user.getUsername());
+        return new SignupResponseDto(user.getId(), user.getUsername(), user.getRoles());
     }
 
     @Transactional
@@ -146,8 +177,12 @@ public class AuthService {
         // ----------------------------
         // 🔥 Return the NEW response DTO
         // ----------------------------
+        Set<String> roles = user.getRoles()
+                .stream()
+                .map(Enum::name)
+                .collect(Collectors.toSet());
 
-        LoginResponseDto loginResponseDto = new LoginResponseDto(authUtil.generateAccessToken(user), user.getId(), patientDto);
+        LoginResponseDto loginResponseDto = new LoginResponseDto(authUtil.generateAccessToken(user), user.getId(), patientDto, roles);
         return ResponseEntity.ok(loginResponseDto);
     }
 }

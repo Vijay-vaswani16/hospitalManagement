@@ -38,15 +38,17 @@ export const getHighestRoleFromToken = (token: string): import('../types').RoleT
     decoded.role ||
     [];
 
+  console.log('rawRoles', rawRoles);
   const rolesArray = Array.isArray(rawRoles) ? rawRoles : [rawRoles];
-
+  console.log('rolesArray', rolesArray);
   const normalized = rolesArray
     .filter(Boolean)
     .map((r) => r.toString().toUpperCase().replace(/^ROLE_/, ''));
 
-  if (normalized.includes('ADMIN')) return 'ADMIN';
-  if (normalized.includes('DOCTOR')) return 'DOCTOR';
-  if (normalized.includes('PATIENT')) return 'PATIENT';
+  console.log('normalized', normalized);
+  if (normalized.includes('ADMIN')) return 'ADMIN' as import('../types').RoleType;
+  if (normalized.includes('DOCTOR')) return 'DOCTOR' as import('../types').RoleType;
+  if (normalized.includes('PATIENT')) return 'PATIENT' as import('../types').RoleType;
 
   return null;
 };

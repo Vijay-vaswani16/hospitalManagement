@@ -21,6 +21,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
+  console.log('context', context);
+  
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
@@ -137,13 +139,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       const response: LoginResponse = await authAPI.login(data);
+      console.log('response', response);
       setToken(response.jwt);
       setUserId(response.userId);
       setLastUsername(data.username);
 
       // 1) Try JWT role immediately
-      const roleFromToken = getHighestRoleFromToken(response.jwt);
+      const roleFromToken = response?.roles.length > 0 ? response.roles[0] as RoleType : null;
+      // getHighestRoleFromToken(response.jwt);
+      // console.log('roleFromToken', roleFromToken);
       if (roleFromToken) {
+        // console.log('setUserRole', roleFromToken);
         setUserRole(roleFromToken);
         localStorage.setItem('userRole', roleFromToken);
         setCachedRole(data.username, roleFromToken);
@@ -151,11 +157,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // 2) Fallback to cached role by username (from prior signup)
       const cachedRole = getCachedRole(data.username);
+      console.log('cachedRole', cachedRole);
       if (cachedRole) {
         setUserRole(cachedRole);
         localStorage.setItem('userRole', cachedRole);
       }
 
+      console.log('response.patient', response.patient);
       // 3) Cache patient profile if provided in login response
       if (response.patient) {
         setPatientProfile(response.patient as Patient);

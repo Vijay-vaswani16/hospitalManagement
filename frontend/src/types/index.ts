@@ -83,5 +83,6 @@ export interface LoginResponse {
   jwt: string;
   userId: number;
   patient?: Patient;
+  roles: RoleType[];
 }
 

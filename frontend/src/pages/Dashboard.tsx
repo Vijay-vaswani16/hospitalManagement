@@ -7,12 +7,17 @@ import { AdminDashboard } from '../components/dashboards/AdminDashboard';
 
 export const Dashboard: React.FC = () => {
   const { userRole, refreshUserRole, loading: authLoading } = useAuth();
+  // refreshUserRole: () => Promise<void>;
+  // const [userRole, setUserRole] = ("DOCTOR");
   const [loading, setLoading] = useState(true);
-
+  console.log('userRole', userRole);
   useEffect(() => {
     const loadRole = async () => {
       if (!userRole) {
+        console.log('line no. 17');
+        console.log('refreshUserRole', refreshUserRole);
         await refreshUserRole();
+        // console.log('refreshUserRole', refreshUserRole);
       }
       setLoading(false);
     };
