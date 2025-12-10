@@ -11,6 +11,7 @@ import type {
   OnboardDoctorRequest,
   User,
 } from '../types';
+import { getHighestRoleFromToken, getUsernameFromToken } from '../utils/jwt';
 
 const API_BASE_URL = 'https://hospitalmanagement-i0jn.onrender.com/api/v1';
 
@@ -20,11 +21,13 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+console.log('api --> ', api);
 
 // Add token to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    console.log('token --> ', token);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -118,21 +121,40 @@ export const adminAPI = {
 // In production, you should add a backend endpoint that returns the current user's role
 export const detectUserRole = async (): Promise<string> => {
   const token = localStorage.getItem('token');
-  
-  if (!token) {
-    // Check stored role first
-    const storedRole = localStorage.getItem('userRole');
-    return storedRole && ['ADMIN', 'DOCTOR', 'PATIENT'].includes(storedRole) ? storedRole : 'PATIENT';
-  }
-  
-  // Check stored role first (from signup) - this is most reliable
+  const lastUsername = localStorage.getItem('lastUsername');
+
+  // 1) Stored role (single-role system)
   const storedRole = localStorage.getItem('userRole');
   if (storedRole && ['ADMIN', 'DOCTOR', 'PATIENT'].includes(storedRole)) {
-    // Verify the stored role by testing endpoint access
-    // But trust the stored role if it was set during signup
     return storedRole;
   }
-  
+
+  // 2) Cached role by username (from prior signup/login)
+  if (lastUsername) {
+    try {
+      const raw = localStorage.getItem('userRoleByUsername');
+      const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+      const cached = map[lastUsername];
+      if (cached && ['ADMIN', 'DOCTOR', 'PATIENT'].includes(cached)) {
+        localStorage.setItem('userRole', cached);
+        return cached;
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }
+
+  // 3) Role from JWT (no network call)
+  if (token) {
+    const roleFromToken = getHighestRoleFromToken(token);
+    if (roleFromToken) {
+      localStorage.setItem('userRole', roleFromToken);
+      return roleFromToken;
+    }
+  } else {
+    return 'PATIENT';
+  }
+
   // Create a temporary axios instance that doesn't redirect on 401/403
   const tempApi = axios.create({
     baseURL: API_BASE_URL,
@@ -146,7 +168,8 @@ export const detectUserRole = async (): Promise<string> => {
   // Check roles in priority order: ADMIN > DOCTOR > PATIENT
   // Return the highest priority role found
   
-  // Try admin endpoint first (highest priority)
+  // 4) Try endpoints in priority order (fallback)
+  // Admin
   try {
     const response = await tempApi.get('/admin/patients', { params: { page: 0, size: 1 } });
     if (response.status === 200) {
@@ -156,21 +179,17 @@ export const detectUserRole = async (): Promise<string> => {
     // Ignore errors
   }
   
-  // Try doctor endpoint (medium priority)
-  // IMPORTANT: Check doctor endpoint BEFORE patient endpoint
-  // because backend might create Patient entity for all users
+  // Doctor
   try {
     const response = await tempApi.get('/doctors/appointments');
     if (response.status === 200) {
       return 'DOCTOR';
     }
   } catch (error) {
-    // Ignore errors - might fail if doctor has no appointments yet
+    // Ignore errors
   }
-  
-  // Try patient endpoint (lowest priority)
-  // NOTE: This might succeed even for doctors if backend creates Patient entity for all users
-  // So we only use this if doctor endpoint failed
+
+  // Patient (lowest)
   try {
     const response = await tempApi.get('/patients/profile');
     if (response.status === 200) {
@@ -180,7 +199,7 @@ export const detectUserRole = async (): Promise<string> => {
     // Ignore errors
   }
   
-  // Default to PATIENT only if nothing else works
+  // Default
   return 'PATIENT';
 };
 

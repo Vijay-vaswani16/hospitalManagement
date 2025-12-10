@@ -23,19 +23,39 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
     private final AuthService authService;
     private final ObjectMapper objectMapper;
 
+//    @Override
+//    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+//
+//        OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication;
+//        OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
+//
+//        String registrationId = token.getAuthorizedClientRegistrationId();
+//
+//        ResponseEntity<LoginResponseDto> loginResponse = authService.handleOAuth2LoginRequest(oAuth2User,
+//                registrationId);
+//
+//        response.setStatus(loginResponse.getStatusCode().value());
+//        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+//        response.getWriter().write(objectMapper.writeValueAsString(loginResponse.getBody()));
+//    }
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
+            throws IOException, ServletException {
 
-        OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication;
+        OAuth2AuthenticationToken oAuthToken = (OAuth2AuthenticationToken) authentication;
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
-        String registrationId = token.getAuthorizedClientRegistrationId();
+        String registrationId = oAuthToken.getAuthorizedClientRegistrationId();
 
-        ResponseEntity<LoginResponseDto> loginResponse = authService.handleOAuth2LoginRequest(oAuth2User,
-                registrationId);
+        ResponseEntity<LoginResponseDto> loginResponse =
+                authService.handleOAuth2LoginRequest(oAuth2User, registrationId);
 
         response.setStatus(loginResponse.getStatusCode().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(loginResponse.getBody()));
+
+        // Convert the NEW LoginResponseDto → JSON
+        response.getWriter().write(
+                objectMapper.writeValueAsString(loginResponse.getBody())
+        );
     }
 }

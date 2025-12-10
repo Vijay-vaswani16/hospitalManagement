@@ -1,9 +1,6 @@
 package com.codingshuttle.youtube.hospitalManagement.security;
 
-import com.codingshuttle.youtube.hospitalManagement.dto.LoginRequestDto;
-import com.codingshuttle.youtube.hospitalManagement.dto.LoginResponseDto;
-import com.codingshuttle.youtube.hospitalManagement.dto.SignUpRequestDto;
-import com.codingshuttle.youtube.hospitalManagement.dto.SignupResponseDto;
+import com.codingshuttle.youtube.hospitalManagement.dto.*;
 import com.codingshuttle.youtube.hospitalManagement.entity.Patient;
 import com.codingshuttle.youtube.hospitalManagement.entity.User;
 import com.codingshuttle.youtube.hospitalManagement.entity.type.AuthProviderType;
@@ -21,7 +18,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,18 +32,80 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final PatientRepository patientRepository;
 
+    private PatientResponseDto toPatientDto(Patient patient) {
+        PatientResponseDto dto = new PatientResponseDto();
+        dto.setId(patient.getId());
+        dto.setName(patient.getName());
+        dto.setGender(patient.getGender());
+        dto.setBirthDate(patient.getBirthDate());
+        dto.setBloodGroup(patient.getBloodGroup());
+        return dto;
+    }
+
+//    public LoginResponseDto login(LoginRequestDto loginRequestDto) {
+//
+//        Authentication authentication = authenticationManager.authenticate(
+//                new UsernamePasswordAuthenticationToken(
+//                        loginRequestDto.getUsername(),
+//                        loginRequestDto.getPassword()
+//                )
+//        );
+//
+//        User user = (User) authentication.getPrincipal();
+//
+//        String token = authUtil.generateAccessToken(user);
+//
+//        Patient patient = patientRepository.findByUserId(user.getId())
+//                .orElseThrow(() -> new RuntimeException("Patient not found for this user"));
+//
+//
+//        PatientResponseDto patientDto = toPatientDto(patient);
+//
+//        return new LoginResponseDto(token, user.getId(), patientDto);
+//    }
+
     public LoginResponseDto login(LoginRequestDto loginRequestDto) {
 
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequestDto.getUsername(), loginRequestDto.getPassword())
+                new UsernamePasswordAuthenticationToken(
+                        loginRequestDto.getUsername(),
+                        loginRequestDto.getPassword()
+                )
         );
 
         User user = (User) authentication.getPrincipal();
 
         String token = authUtil.generateAccessToken(user);
 
-        return new LoginResponseDto(token, user.getId());
+        Patient patient = patientRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new RuntimeException("Patient not found for this user"));
+
+        PatientResponseDto patientDto = toPatientDto(patient);
+
+        return new LoginResponseDto(
+                token,
+                user.getId(),
+                patientDto,
+                new HashSet<>(user.getRoles()
+                        .stream()
+                        .map(Enum::name)
+                        .toList())
+        );
     }
+
+
+//    public LoginResponseDto login(LoginRequestDto loginRequestDto) {
+//
+//        Authentication authentication = authenticationManager.authenticate(
+//                new UsernamePasswordAuthenticationToken(loginRequestDto.getUsername(), loginRequestDto.getPassword())
+//        );
+//
+//        User user = (User) authentication.getPrincipal();
+//
+//        String token = authUtil.generateAccessToken(user);
+//
+//        return new LoginResponseDto(token, user.getId());
+//    }
 
     public User signUpInternal(SignUpRequestDto signupRequestDto, AuthProviderType authProviderType, String providerId) {
         User user = userRepository.findByUsername(signupRequestDto.getUsername()).orElse(null);
@@ -77,7 +138,7 @@ public class AuthService {
     // login controller
     public SignupResponseDto signup(SignUpRequestDto signupRequestDto) {
         User user = signUpInternal(signupRequestDto, AuthProviderType.EMAIL, null);
-        return new SignupResponseDto(user.getId(), user.getUsername());
+        return new SignupResponseDto(user.getId(), user.getUsername(), user.getRoles());
     }
 
     @Transactional
@@ -104,7 +165,24 @@ public class AuthService {
             throw new BadCredentialsException("This email is already registered with provider "+emailUser.getProviderType());
         }
 
-        LoginResponseDto loginResponseDto = new LoginResponseDto(authUtil.generateAccessToken(user), user.getId());
+        // ----------------------------
+        // 🔥 Fetch the patient
+        // ----------------------------
+        Patient patient = patientRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new RuntimeException("Patient not found for OAuth2 user"));
+
+        // Map to DTO
+        PatientResponseDto patientDto = toPatientDto(patient);
+
+        // ----------------------------
+        // 🔥 Return the NEW response DTO
+        // ----------------------------
+        Set<String> roles = user.getRoles()
+                .stream()
+                .map(Enum::name)
+                .collect(Collectors.toSet());
+
+        LoginResponseDto loginResponseDto = new LoginResponseDto(authUtil.generateAccessToken(user), user.getId(), patientDto, roles);
         return ResponseEntity.ok(loginResponseDto);
     }
 }

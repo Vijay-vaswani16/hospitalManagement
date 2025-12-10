@@ -26,3 +26,30 @@ export const getUsernameFromToken = (token: string): string | null => {
   return decoded?.sub || null;
 };
 
+export const getHighestRoleFromToken = (token: string): import('../types').RoleType | null => {
+  const decoded = decodeJWT(token);
+  if (!decoded) return null;
+
+  const rawRoles: string[] =
+    decoded.roles ||
+    decoded.authorities ||
+    decoded.scope ||
+    decoded.scopes ||
+    decoded.role ||
+    [];
+
+  console.log('rawRoles', rawRoles);
+  const rolesArray = Array.isArray(rawRoles) ? rawRoles : [rawRoles];
+  console.log('rolesArray', rolesArray);
+  const normalized = rolesArray
+    .filter(Boolean)
+    .map((r) => r.toString().toUpperCase().replace(/^ROLE_/, ''));
+
+  console.log('normalized', normalized);
+  if (normalized.includes('ADMIN')) return 'ADMIN' as import('../types').RoleType;
+  if (normalized.includes('DOCTOR')) return 'DOCTOR' as import('../types').RoleType;
+  if (normalized.includes('PATIENT')) return 'PATIENT' as import('../types').RoleType;
+
+  return null;
+};
+
