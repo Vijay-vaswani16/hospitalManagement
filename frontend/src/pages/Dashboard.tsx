@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { RoleType } from '../types';
@@ -57,4 +55,3 @@ export const Dashboard: React.FC = () => {
   );
 };
 
->>>>>>> vijay_config_change

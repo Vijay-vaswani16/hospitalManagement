@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authAPI, detectUserRole } from '../services/api';
 import type { LoginRequest, SignUpRequest, LoginResponse, RoleType, Patient } from '../types';
@@ -239,4 +237,3 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
->>>>>>> vijay_config_change
