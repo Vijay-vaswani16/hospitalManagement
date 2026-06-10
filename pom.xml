@@ -8,7 +8,7 @@
 		<version>3.5.3</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.codingshuttle.youtube</groupId>
+	<groupId>com.vijay</groupId>
 	<artifactId>hospitalManagement</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>hospitalManagement</name>

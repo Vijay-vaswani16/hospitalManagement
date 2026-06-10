@@ -20,6 +20,7 @@ export const Login: React.FC = () => {
       await login(formData);
       navigate('/dashboard');
     } catch (err: any) {
+      console.log('Login error --> ', err);
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     }
   };

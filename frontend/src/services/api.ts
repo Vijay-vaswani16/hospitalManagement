@@ -13,8 +13,8 @@ import type {
 } from '../types';
 import { getHighestRoleFromToken, getUsernameFromToken } from '../utils/jwt';
 
-// const API_BASE_URL = '/api/v1';
-const API_BASE_URL = 'https://hospitalmanagement-1-wybi.onrender.com/api/v1';
+const API_BASE_URL = '/api/v1';
+// const API_BASE_URL = 'https://hospitalmanagement-1-wybi.onrender.com/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -28,8 +28,9 @@ console.log('api --> ', api);
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    const requestUrl = config.url ?? '';
     console.log('token --> ', token);
-    if (token) {
+    if (token && !requestUrl.startsWith('/auth/')) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -43,7 +44,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestUrl = error.config?.url ?? '';
+    const isAuthRequest = requestUrl.startsWith('/auth/');
+
+    if (error.response?.status === 401 && !isAuthRequest) {
       localStorage.removeItem('token');
       localStorage.removeItem('userId');
       localStorage.removeItem('userRole');
